@@ -1,0 +1,43 @@
+<div id="app">
+  <h1>Contador Bazas</h1>
+
+  <section id="setup">
+    <h3>Configuración Inicial</h3>
+    <input type="text" id="nombres" placeholder="Nombres separados con comas">
+    <div style="margin-top: 10px;">
+      <label>Máximo de cartas:</label>
+      <input type="number" id="max-cartas" value="10" min="1" style="width: 50px;">
+    </div>
+    <button onclick="iniciarPartida()" style="margin-top: 10px;">Empezar Partida</button>
+  </section>
+
+  <section id="game-panel" style="display:none;">
+    <div class="info-ronda">
+      <h2 id="display-ronda">Ronda 1</h2>
+      <p id="display-cartas">Cartas a repartir: 1</p>
+    </div>
+    <div id="inputs-contenedor">
+      <div id="apuestas-section">
+        <h4>Apuestas (al inicio)</h4>
+        <div id="lista-apuestas"></div>
+      </div>
+      <div id="resultados-section" style="margin-top:20px;">
+        <h4>Resultados Reales (al final)</h4>
+        <div id="lista-resultados"></div>
+      </div>
+    </div>
+    <button id="btn-procesar" onclick="procesarRondaUI()" style="margin-top:20px;">Cargar Ronda</button>
+  </section>
+
+  <section id="tabla-puntos" style="display:none;">
+    <h3>Puntuación Total</h3>
+    <table>
+      <thead>
+        <tr id="header-jugadores">
+          <th>Cartas</th>
+        </tr>
+      </thead>
+      <tbody id="cuerpo-tabla"></tbody>
+    </table>
+  </section>
+</div>
