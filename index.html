@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Contador de Bazas</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -50,6 +51,22 @@
         <tbody id="cuerpo-tabla"></tbody>
       </table>
     </section>
+
+    <section id="final-prompt" style="display:none; text-align: center; background: #e8f8f0;">
+      <h2 id="ganador-texto">¡Partida Terminada!</h2>
+      <p style="font-size: 1.2rem; margin: 20px 0;">¿Querés ver las estadísticas gráficas?</p>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button onclick="mostrarEstadisticas()" style="background-color: var(--accent);">Sí, ver gráficos</button>
+        <button onclick="location.reload()" style="background-color: var(--danger);">No, nueva partida</button>
+      </div>
+    </section>
+
+    <section id="charts-panel" style="display:none;">
+      <h3>Análisis de Rendimiento</h3>
+      <div id="charts-container"></div>
+      <button onclick="location.reload()" style="margin-top: 20px; background-color: var(--primary);">Volver al Inicio</button>
+    </section>
+
   </div>
 
   <script src="bazas.js"></script>
