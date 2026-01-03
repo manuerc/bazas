@@ -1,8 +1,12 @@
+// --- LÓGICA DEL JUEGO (BACKEND) ---
 class JuegoPodrida {
     constructor(nombresJugadores, maxCartas) {
         this.jugadores = nombresJugadores.map(nombre => ({
             nombre: nombre,
-            puntos: 0
+            puntos: 0,
+            // NUEVO: Guardamos el historial de apuestas y resultados reales
+            historialPredicciones: [],
+            historialReales: []
         }));
         this.rondas = this.generarSecuenciaRondas(maxCartas);
         this.rondaActualIdx = 0;
@@ -14,24 +18,20 @@ class JuegoPodrida {
         return subida.concat(bajada);
     }
 
-    // Regla 1: Las apuestas NO pueden sumar igual a las cartas
     validarApuestas(apuestas) {
         const cartas = this.rondas[this.rondaActualIdx];
         const suma = apuestas.reduce((a, b) => a + b, 0);
         if (suma === cartas) {
             throw new Error(`¡Regla de la Podrida! La suma de apuestas no puede ser ${cartas}. Alguien tiene que cambiar.`);
         }
-        return true;
     }
 
-    // Regla 2: Los resultados reales DEBEN sumar igual a las cartas
     validarResultados(resultados) {
         const cartas = this.rondas[this.rondaActualIdx];
         const suma = resultados.reduce((a, b) => a + b, 0);
         if (suma !== cartas) {
             throw new Error(`Error en resultados: La suma de bazas ganadas debe ser exactamente ${cartas} (cargaste ${suma}).`);
         }
-        return true;
     }
 
     calcularPuntajeRonda(apuesta, reales) {
@@ -43,12 +43,14 @@ class JuegoPodrida {
     }
 
     procesarRonda(apuestas, resultados) {
-        // Ejecutar ambas validaciones
         this.validarApuestas(apuestas);
         this.validarResultados(resultados);
 
         this.jugadores.forEach((jugador, i) => {
             jugador.puntos += this.calcularPuntajeRonda(apuestas[i], resultados[i]);
+            // NUEVO: Guardamos los datos para los gráficos
+            jugador.historialPredicciones.push(apuestas[i]);
+            jugador.historialReales.push(resultados[i]);
         });
         this.rondaActualIdx++;
     }
@@ -58,7 +60,10 @@ class JuegoPodrida {
     }
 }
 
+// --- LÓGICA DE INTERFAZ (UI) ---
 let partida;
+// Variable para guardar las instancias de los gráficos y destruirlos si es necesario
+let chartsInstances = []; 
 
 function iniciarPartida() {
     const nombres = document.getElementById('nombres').value.split(',').map(n => n.trim()).filter(n => n);
@@ -78,6 +83,7 @@ function iniciarPartida() {
 
 function renderizarHeaders(nombres) {
     const header = document.getElementById('header-jugadores');
+    header.innerHTML = '<th>Cartas</th>'; // Reset header
     nombres.forEach(n => {
         const th = document.createElement('th');
         th.innerText = n;
@@ -111,11 +117,10 @@ function procesarRondaUI() {
         if (partida.rondaActualIdx < partida.rondas.length) {
             actualizarInterfazRonda();
         } else {
-            const g = partida.obtenerGanador();
-            alert(`¡Fin! Ganó ${g.nombre} con ${g.puntos} puntos.`);
+            finDelJuegoUI();
         }
     } catch (e) {
-        alert(e.message); // Aquí mostrará el error de suma incorrecta o de la regla de la podrida
+        alert(e.message);
     }
 }
 
@@ -126,4 +131,89 @@ function agregarFilaTabla() {
         tr.innerHTML += `<td>${j.puntos}</td>`;
     });
     document.getElementById('cuerpo-tabla').appendChild(tr);
+}
+
+// NUEVO: Función que maneja el fin del juego
+function finDelJuegoUI() {
+    const g = partida.obtenerGanador();
+    document.getElementById('game-panel').style.display = 'none';
+    document.getElementById('ganador-texto').innerText = `🎉 ¡Ganó ${g.nombre} con ${g.puntos} puntos! 🎉`;
+    document.getElementById('final-prompt').style.display = 'block';
+}
+
+// NUEVO: Función para generar los gráficos con Chart.js
+function mostrarEstadisticas() {
+    document.getElementById('final-prompt').style.display = 'none';
+    document.getElementById('tabla-puntos').style.display = 'none';
+    document.getElementById('charts-panel').style.display = 'block';
+
+    const container = document.getElementById('charts-container');
+    container.innerHTML = ''; // Limpiar gráficos anteriores
+
+    // Generamos las etiquetas del eje X (Ronda 1, Ronda 2...)
+    const labels = partida.rondas.map((c, i) => `R${i+1} (${c}c)`);
+
+    partida.jugadores.forEach((jugador, index) => {
+        // Crear contenedor para el canvas
+        const chartDiv = document.createElement('div');
+        chartDiv.style.marginBottom = '40px';
+        chartDiv.style.padding = '15px';
+        chartDiv.style.background = '#fff';
+        chartDiv.style.borderRadius = '8px';
+        chartDiv.style.boxShadow = '0 2px 5px rgba(0,0,0,0.05)';
+        
+        // Título del gráfico
+        const title = document.createElement('h4');
+        title.innerText = `Rendimiento: ${jugador.nombre}`;
+        title.style.textAlign = 'center';
+        chartDiv.appendChild(title);
+
+        // Canvas
+        const canvas = document.createElement('canvas');
+        canvas.id = `chart-${index}`;
+        chartDiv.appendChild(canvas);
+        container.appendChild(chartDiv);
+
+        // Configuración de Chart.js para barras agrupadas
+        const ctx = canvas.getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Dijo que ganaba',
+                        data: jugador.historialPredicciones,
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)', // Azul
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Realmente ganó',
+                        data: jugador.historialReales,
+                        backgroundColor: 'rgba(39, 174, 96, 0.7)', // Verde
+                        borderColor: 'rgba(39, 174, 96, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1 },
+                        title: { display: true, text: 'Bazas' }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                }
+            }
+        });
+        chartsInstances.push(chart);
+    });
 }
