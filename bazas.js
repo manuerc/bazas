@@ -148,72 +148,91 @@ function mostrarEstadisticas() {
     document.getElementById('charts-panel').style.display = 'block';
 
     const container = document.getElementById('charts-container');
-    container.innerHTML = ''; // Limpiar gráficos anteriores
+    container.innerHTML = ''; 
 
-    // Generamos las etiquetas del eje X (Ronda 1, Ronda 2...)
-    const labels = partida.rondas.map((c, i) => `R${i+1} (${c}c)`);
+    // El eje X ahora son los valores posibles de bazas (0, 1, 2... hasta el máximo de cartas)
+    const maxPosible = Math.max(...partida.rondas);
+    const labelsEjeX = Array.from({ length: maxPosible + 1 }, (_, i) => i.toString());
 
     partida.jugadores.forEach((jugador, index) => {
-        // Crear contenedor para el canvas
-        const chartDiv = document.createElement('div');
-        chartDiv.style.marginBottom = '40px';
-        chartDiv.style.padding = '15px';
-        chartDiv.style.background = '#fff';
-        chartDiv.style.borderRadius = '8px';
-        chartDiv.style.boxShadow = '0 2px 5px rgba(0,0,0,0.05)';
+        // --- 1. PROCESAMIENTO DE DATOS (FRECUENCIAS) ---
+        // Contamos cuántas veces ocurre cada valor en las predicciones y en los reales
+        const frecPredicciones = new Array(maxPosible + 1).fill(0);
+        const frecReales = new Array(maxPosible + 1).fill(0);
+
+        jugador.historialPredicciones.forEach(val => frecPredicciones[val]++);
+        jugador.historialReales.forEach(val => frecReales[val]++);
+
+        // --- 2. CREACIÓN DE LA INTERFAZ ---
+        const playerSection = document.createElement('div');
+        playerSection.className = 'player-stats-section';
+        playerSection.style.marginBottom = '50px';
+        playerSection.innerHTML = `<h3 style="text-align:center; color:var(--primary);">${jugador.nombre}</h3>`;
         
-        // Título del gráfico
-        const title = document.createElement('h4');
-        title.innerText = `Rendimiento: ${jugador.nombre}`;
-        title.style.textAlign = 'center';
-        chartDiv.appendChild(title);
+        // Contenedor para los dos gráficos del jugador (lado a lado o uno bajo el otro)
+        const chartsWrapper = document.createElement('div');
+        chartsWrapper.style.display = 'flex';
+        chartsWrapper.style.flexWrap = 'wrap';
+        chartsWrapper.style.gap = '10px';
+        
+        playerSection.appendChild(chartsWrapper);
+        container.appendChild(playerSection);
 
-        // Canvas
-        const canvas = document.createElement('canvas');
-        canvas.id = `chart-${index}`;
-        chartDiv.appendChild(canvas);
-        container.appendChild(chartDiv);
+        // --- 3. RENDERIZADO DE LOS 2 GRÁFICOS POR JUGADOR ---
+        crearGraficoBarra(
+            chartsWrapper, 
+            `Dijo que ganaba (Frecuencia)`, 
+            frecPredicciones, 
+            labelsEjeX, 
+            'rgba(54, 162, 235, 0.7)'
+        );
 
-        // Configuración de Chart.js para barras agrupadas
-        const ctx = canvas.getContext('2d');
-        const chart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Dijo que ganaba',
-                        data: jugador.historialPredicciones,
-                        backgroundColor: 'rgba(54, 162, 235, 0.6)', // Azul
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Realmente ganó',
-                        data: jugador.historialReales,
-                        backgroundColor: 'rgba(39, 174, 96, 0.7)', // Verde
-                        borderColor: 'rgba(39, 174, 96, 1)',
-                        borderWidth: 1
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: { stepSize: 1 },
-                        title: { display: true, text: 'Bazas' }
-                    }
+        crearGraficoBarra(
+            chartsWrapper, 
+            `Realmente ganó (Frecuencia)`, 
+            frecReales, 
+            labelsEjeX, 
+            'rgba(39, 174, 96, 0.7)'
+        );
+    });
+}
+
+// Función auxiliar para no repetir código de Chart.js
+function crearGraficoBarra(contenedor, titulo, data, labels, color) {
+    const div = document.createElement('div');
+    div.style.flex = '1 1 250px'; // Se adapta al ancho
+    div.style.minWidth = '250px';
+    
+    const canvas = document.createElement('canvas');
+    div.appendChild(canvas);
+    contenedor.appendChild(div);
+
+    new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: titulo,
+                data: data,
+                backgroundColor: color,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { 
+                    beginAtZero: true, 
+                    ticks: { stepSize: 1 },
+                    title: { display: true, text: 'Cantidad de Rondas' }
                 },
-                plugins: {
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false
-                    }
+                x: {
+                    title: { display: true, text: 'N° de Bazas' }
                 }
+            },
+            plugins: {
+                legend: { display: true, position: 'top' }
             }
-        });
-        chartsInstances.push(chart);
+        }
     });
 }
