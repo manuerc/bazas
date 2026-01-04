@@ -1,15 +1,16 @@
 // --- LÓGICA DEL JUEGO (BACKEND) ---
 class JuegoPodrida {
-    constructor(nombresJugadores, maxCartas) {
+    constructor(nombresJugadores, maxCartas, repartidorInicialIdx) {
         this.jugadores = nombresJugadores.map(nombre => ({
             nombre: nombre,
             puntos: 0,
-            // NUEVO: Guardamos el historial de apuestas y resultados reales
             historialPredicciones: [],
             historialReales: []
         }));
         this.rondas = this.generarSecuenciaRondas(maxCartas);
         this.rondaActualIdx = 0;
+        // Seguimiento del repartidor
+        this.repartidorActualIdx = repartidorInicialIdx;
     }
 
     generarSecuenciaRondas(max) {
@@ -22,7 +23,7 @@ class JuegoPodrida {
         const cartas = this.rondas[this.rondaActualIdx];
         const suma = apuestas.reduce((a, b) => a + b, 0);
         if (suma === cartas) {
-            throw new Error(`¡Regla de la Podrida! La suma de apuestas no puede ser ${cartas}. Alguien tiene que cambiar.`);
+            throw new Error(`¡Regla de la Podrida! La suma de apuestas no puede ser ${cartas}.`);
         }
     }
 
@@ -30,16 +31,12 @@ class JuegoPodrida {
         const cartas = this.rondas[this.rondaActualIdx];
         const suma = resultados.reduce((a, b) => a + b, 0);
         if (suma !== cartas) {
-            throw new Error(`Error en resultados: La suma de bazas ganadas debe ser exactamente ${cartas} (cargaste ${suma}).`);
+            throw new Error(`Error: La suma debe ser ${cartas} (pusiste ${suma}).`);
         }
     }
 
     calcularPuntajeRonda(apuesta, reales) {
-        if (apuesta === reales) {
-            return 10 + (reales * 3);
-        } else {
-            return -(Math.abs(apuesta - reales) * 3);
-        }
+        return (apuesta === reales) ? (10 + (reales * 3)) : -(Math.abs(apuesta - reales) * 3);
     }
 
     procesarRonda(apuestas, resultados) {
@@ -48,11 +45,13 @@ class JuegoPodrida {
 
         this.jugadores.forEach((jugador, i) => {
             jugador.puntos += this.calcularPuntajeRonda(apuestas[i], resultados[i]);
-            // NUEVO: Guardamos los datos para los gráficos
             jugador.historialPredicciones.push(apuestas[i]);
             jugador.historialReales.push(resultados[i]);
         });
+
         this.rondaActualIdx++;
+        // ROTACIÓN DEL REPARTIDOR: Pasa al siguiente según el orden de la lista
+        this.repartidorActualIdx = (this.repartidorActualIdx + 1) % this.jugadores.length;
     }
 
     obtenerGanador() {
@@ -62,16 +61,39 @@ class JuegoPodrida {
 
 // --- LÓGICA DE INTERFAZ (UI) ---
 let partida;
-// Variable para guardar las instancias de los gráficos y destruirlos si es necesario
-let chartsInstances = []; 
+let indiceSorteado = -1;
+
+// FUNCIÓN DE SORTEO
+function sortearRepartidor() {
+    const nombresInput = document.getElementById('nombres').value;
+    const nombres = nombresInput.split(',').map(n => n.trim()).filter(n => n);
+
+    if (nombres.length < 2) {
+        return alert("Ingresá los nombres primero para sortear.");
+    }
+
+    // Efecto visual simple (opcional)
+    const resElem = document.getElementById('resultado-sorteo');
+    resElem.innerText = "Sorteando...";
+
+    setTimeout(() => {
+        indiceSorteado = Math.floor(Math.random() * nombres.length);
+        resElem.innerText = `👉 Empieza repartiendo: ${nombres[indiceSorteado]}`;
+    }, 500);
+}
 
 function iniciarPartida() {
     const nombres = document.getElementById('nombres').value.split(',').map(n => n.trim()).filter(n => n);
     const max = parseInt(document.getElementById('max-cartas').value);
     
-    if (nombres.length < 2 || isNaN(max)) return alert("Configurá bien los nombres y cartas.");
+    if (nombres.length < 2) return alert("Ingresá al menos 2 nombres.");
+    
+    // Si no sortearon, elegimos el primero por defecto
+    if (indiceSorteado === -1) {
+        indiceSorteado = 0;
+    }
 
-    partida = new JuegoPodrida(nombres, max);
+    partida = new JuegoPodrida(nombres, max, indiceSorteado);
     
     document.getElementById('setup').style.display = 'none';
     document.getElementById('game-panel').style.display = 'block';
@@ -83,7 +105,7 @@ function iniciarPartida() {
 
 function renderizarHeaders(nombres) {
     const header = document.getElementById('header-jugadores');
-    header.innerHTML = '<th>Cartas</th>'; // Reset header
+    header.innerHTML = '<th>Cartas</th>';
     nombres.forEach(n => {
         const th = document.createElement('th');
         th.innerText = n;
@@ -95,6 +117,10 @@ function actualizarInterfazRonda() {
     const cartas = partida.rondas[partida.rondaActualIdx];
     document.getElementById('display-ronda').innerText = `Ronda ${partida.rondaActualIdx + 1} de ${partida.rondas.length}`;
     document.getElementById('display-cartas').innerText = `Cartas a repartir: ${cartas}`;
+    
+    // MOSTRAR REPARTIDOR ACTUAL
+    const repartidor = partida.jugadores[partida.repartidorActualIdx].nombre;
+    document.getElementById('display-repartidor').innerText = `🃏 Reparte: ${repartidor}`;
     
     const listaApuestas = document.getElementById('lista-apuestas');
     const listaResultados = document.getElementById('lista-resultados');
@@ -133,7 +159,6 @@ function agregarFilaTabla() {
     document.getElementById('cuerpo-tabla').appendChild(tr);
 }
 
-// NUEVO: Función que maneja el fin del juego
 function finDelJuegoUI() {
     const g = partida.obtenerGanador();
     document.getElementById('game-panel').style.display = 'none';
@@ -141,7 +166,6 @@ function finDelJuegoUI() {
     document.getElementById('final-prompt').style.display = 'block';
 }
 
-// NUEVO: Función para generar los gráficos con Chart.js
 function mostrarEstadisticas() {
     document.getElementById('final-prompt').style.display = 'none';
     document.getElementById('tabla-puntos').style.display = 'none';
@@ -150,59 +174,36 @@ function mostrarEstadisticas() {
     const container = document.getElementById('charts-container');
     container.innerHTML = ''; 
 
-    // El eje X ahora son los valores posibles de bazas (0, 1, 2... hasta el máximo de cartas)
     const maxPosible = Math.max(...partida.rondas);
     const labelsEjeX = Array.from({ length: maxPosible + 1 }, (_, i) => i.toString());
 
     partida.jugadores.forEach((jugador, index) => {
-        // --- 1. PROCESAMIENTO DE DATOS (FRECUENCIAS) ---
-        // Contamos cuántas veces ocurre cada valor en las predicciones y en los reales
         const frecPredicciones = new Array(maxPosible + 1).fill(0);
         const frecReales = new Array(maxPosible + 1).fill(0);
 
         jugador.historialPredicciones.forEach(val => frecPredicciones[val]++);
         jugador.historialReales.forEach(val => frecReales[val]++);
 
-        // --- 2. CREACIÓN DE LA INTERFAZ ---
         const playerSection = document.createElement('div');
-        playerSection.className = 'player-stats-section';
         playerSection.style.marginBottom = '50px';
-        playerSection.innerHTML = `<h3 style="text-align:center; color:var(--primary);">${jugador.nombre}</h3>`;
+        playerSection.innerHTML = `<h3 style="text-align:center; margin-top:30px;">Análisis de ${jugador.nombre}</h3>`;
         
-        // Contenedor para los dos gráficos del jugador (lado a lado o uno bajo el otro)
         const chartsWrapper = document.createElement('div');
         chartsWrapper.style.display = 'flex';
         chartsWrapper.style.flexWrap = 'wrap';
-        chartsWrapper.style.gap = '10px';
+        chartsWrapper.style.gap = '20px';
         
         playerSection.appendChild(chartsWrapper);
         container.appendChild(playerSection);
 
-        // --- 3. RENDERIZADO DE LOS 2 GRÁFICOS POR JUGADOR ---
-        crearGraficoBarra(
-            chartsWrapper, 
-            `Dijo que ganaba (Frecuencia)`, 
-            frecPredicciones, 
-            labelsEjeX, 
-            'rgba(54, 162, 235, 0.7)'
-        );
-
-        crearGraficoBarra(
-            chartsWrapper, 
-            `Realmente ganó (Frecuencia)`, 
-            frecReales, 
-            labelsEjeX, 
-            'rgba(39, 174, 96, 0.7)'
-        );
+        crearGraficoBarra(chartsWrapper, `Dijo que ganaba`, frecPredicciones, labelsEjeX, 'rgba(54, 162, 235, 0.7)');
+        crearGraficoBarra(chartsWrapper, `Realmente ganó`, frecReales, labelsEjeX, 'rgba(39, 174, 96, 0.7)');
     });
 }
 
-// Función auxiliar para no repetir código de Chart.js
 function crearGraficoBarra(contenedor, titulo, data, labels, color) {
     const div = document.createElement('div');
-    div.style.flex = '1 1 250px'; // Se adapta al ancho
-    div.style.minWidth = '250px';
-    
+    div.style.flex = '1 1 300px';
     const canvas = document.createElement('canvas');
     div.appendChild(canvas);
     contenedor.appendChild(div);
@@ -221,17 +222,7 @@ function crearGraficoBarra(contenedor, titulo, data, labels, color) {
         options: {
             responsive: true,
             scales: {
-                y: { 
-                    beginAtZero: true, 
-                    ticks: { stepSize: 1 },
-                    title: { display: true, text: 'Cantidad de Rondas' }
-                },
-                x: {
-                    title: { display: true, text: 'N° de Bazas' }
-                }
-            },
-            plugins: {
-                legend: { display: true, position: 'top' }
+                y: { beginAtZero: true, ticks: { stepSize: 1 } }
             }
         }
     });
