@@ -1,29 +1,40 @@
 // --- LÓGICA DEL JUEGO (BACKEND) ---
 class JuegoPodrida {
-    constructor(nombresJugadores, maxCartas, repartidorInicialIdx) {
+    constructor(nombresJugadores, maxCartas, repartidorInicialIdx, conPodrida) {
         this.jugadores = nombresJugadores.map(nombre => ({
             nombre: nombre,
             puntos: 0,
             historialPredicciones: [],
             historialReales: []
         }));
-        this.rondas = this.generarSecuenciaRondas(maxCartas);
+        this.conPodrida = conPodrida;
+        // Generamos la secuencia de rondas (Subida -> Pico -> Bajada)
+        this.rondas = this.generarSecuenciaRondas(maxCartas, nombresJugadores.length);
         this.rondaActualIdx = 0;
-        // Seguimiento del repartidor
         this.repartidorActualIdx = repartidorInicialIdx;
     }
 
-    generarSecuenciaRondas(max) {
-        const subida = Array.from({ length: max }, (_, i) => i + 1);
+    generarSecuenciaRondas(max, numJugadores) {
+        // Parte ascendente: de 1 hasta max-1
+        const subida = Array.from({ length: max - 1 }, (_, i) => i + 1);
+        
+        // El pico (la cantidad máxima de cartas): 
+        // Si hay "Podrida", se repite N veces (una vez por jugador). 
+        // Si no, se repite 2 veces como siempre.
+        const repeticionesPico = this.conPodrida ? numJugadores : 2;
+        const pico = Array(repeticionesPico).fill(max);
+        
+        // Parte descendente: de max-1 hasta 1
         const bajada = [...subida].reverse();
-        return subida.concat(bajada);
+        
+        return subida.concat(pico).concat(bajada);
     }
 
     validarApuestas(apuestas) {
         const cartas = this.rondas[this.rondaActualIdx];
         const suma = apuestas.reduce((a, b) => a + b, 0);
         if (suma === cartas) {
-            throw new Error(`¡Regla de la Podrida! La suma de apuestas no puede ser ${cartas}.`);
+            throw new Error(`¡Regla de la Podrida! La suma de apuestas no puede ser ${cartas}. Alguien debe cambiar.`);
         }
     }
 
@@ -31,12 +42,16 @@ class JuegoPodrida {
         const cartas = this.rondas[this.rondaActualIdx];
         const suma = resultados.reduce((a, b) => a + b, 0);
         if (suma !== cartas) {
-            throw new Error(`Error: La suma debe ser ${cartas} (pusiste ${suma}).`);
+            throw new Error(`Error en resultados: La suma de bazas ganadas debe ser exactamente ${cartas} (pusiste ${suma}).`);
         }
     }
 
     calcularPuntajeRonda(apuesta, reales) {
-        return (apuesta === reales) ? (10 + (reales * 3)) : -(Math.abs(apuesta - reales) * 3);
+        if (apuesta === reales) {
+            return 10 + (reales * 3);
+        } else {
+            return -(Math.abs(apuesta - reales) * 3);
+        }
     }
 
     procesarRonda(apuestas, resultados) {
@@ -50,7 +65,7 @@ class JuegoPodrida {
         });
 
         this.rondaActualIdx++;
-        // ROTACIÓN DEL REPARTIDOR: Pasa al siguiente según el orden de la lista
+        // Rotación circular del repartidor
         this.repartidorActualIdx = (this.repartidorActualIdx + 1) % this.jugadores.length;
     }
 
@@ -63,7 +78,6 @@ class JuegoPodrida {
 let partida;
 let indiceSorteado = -1;
 
-// FUNCIÓN DE SORTEO
 function sortearRepartidor() {
     const nombresInput = document.getElementById('nombres').value;
     const nombres = nombresInput.split(',').map(n => n.trim()).filter(n => n);
@@ -72,7 +86,6 @@ function sortearRepartidor() {
         return alert("Ingresá los nombres primero para sortear.");
     }
 
-    // Efecto visual simple (opcional)
     const resElem = document.getElementById('resultado-sorteo');
     resElem.innerText = "Sorteando...";
 
@@ -85,15 +98,13 @@ function sortearRepartidor() {
 function iniciarPartida() {
     const nombres = document.getElementById('nombres').value.split(',').map(n => n.trim()).filter(n => n);
     const max = parseInt(document.getElementById('max-cartas').value);
+    const conPodrida = document.getElementById('con-podrida').checked;
     
-    if (nombres.length < 2) return alert("Ingresá al menos 2 nombres.");
+    if (nombres.length < 2 || isNaN(max)) return alert("Configurá bien los nombres y el número de cartas.");
     
-    // Si no sortearon, elegimos el primero por defecto
-    if (indiceSorteado === -1) {
-        indiceSorteado = 0;
-    }
+    if (indiceSorteado === -1) indiceSorteado = 0;
 
-    partida = new JuegoPodrida(nombres, max, indiceSorteado);
+    partida = new JuegoPodrida(nombres, max, indiceSorteado, conPodrida);
     
     document.getElementById('setup').style.display = 'none';
     document.getElementById('game-panel').style.display = 'block';
@@ -115,12 +126,26 @@ function renderizarHeaders(nombres) {
 
 function actualizarInterfazRonda() {
     const cartas = partida.rondas[partida.rondaActualIdx];
+    const maxCartas = Math.max(...partida.rondas);
+    
     document.getElementById('display-ronda').innerText = `Ronda ${partida.rondaActualIdx + 1} de ${partida.rondas.length}`;
     document.getElementById('display-cartas').innerText = `Cartas a repartir: ${cartas}`;
     
-    // MOSTRAR REPARTIDOR ACTUAL
+    // Cálculos de Repartidor y Mano
     const repartidor = partida.jugadores[partida.repartidorActualIdx].nombre;
+    const manoIdx = (partida.repartidorActualIdx + 1) % partida.jugadores.length;
+    const mano = partida.jugadores[manoIdx].nombre;
+
     document.getElementById('display-repartidor').innerText = `🃏 Reparte: ${repartidor}`;
+    
+    // UI para la variante "Podrida"
+    if (cartas === maxCartas && partida.conPodrida) {
+        document.getElementById('display-mano').innerText = `🖐️ Mano (Elige Palo): ${mano}`;
+        document.querySelector('.info-ronda').style.backgroundColor = "#d35400"; // Cambia a naranja en la Podrida
+    } else {
+        document.getElementById('display-mano').innerText = `🖐️ Mano: ${mano}`;
+        document.querySelector('.info-ronda').style.backgroundColor = "#2c3e50"; // Color normal
+    }
     
     const listaApuestas = document.getElementById('lista-apuestas');
     const listaResultados = document.getElementById('lista-resultados');
@@ -186,7 +211,7 @@ function mostrarEstadisticas() {
 
         const playerSection = document.createElement('div');
         playerSection.style.marginBottom = '50px';
-        playerSection.innerHTML = `<h3 style="text-align:center; margin-top:30px;">Análisis de ${jugador.nombre}</h3>`;
+        playerSection.innerHTML = `<h3 style="text-align:center; margin-top:30px;">Análisis: ${jugador.nombre}</h3>`;
         
         const chartsWrapper = document.createElement('div');
         chartsWrapper.style.display = 'flex';
@@ -196,8 +221,8 @@ function mostrarEstadisticas() {
         playerSection.appendChild(chartsWrapper);
         container.appendChild(playerSection);
 
-        crearGraficoBarra(chartsWrapper, `Dijo que ganaba`, frecPredicciones, labelsEjeX, 'rgba(54, 162, 235, 0.7)');
-        crearGraficoBarra(chartsWrapper, `Realmente ganó`, frecReales, labelsEjeX, 'rgba(39, 174, 96, 0.7)');
+        crearGraficoBarra(chartsWrapper, `Dijo que ganaba (Frecuencia)`, frecPredicciones, labelsEjeX, 'rgba(54, 162, 235, 0.7)');
+        crearGraficoBarra(chartsWrapper, `Realmente ganó (Frecuencia)`, frecReales, labelsEjeX, 'rgba(39, 174, 96, 0.7)');
     });
 }
 
@@ -222,7 +247,8 @@ function crearGraficoBarra(contenedor, titulo, data, labels, color) {
         options: {
             responsive: true,
             scales: {
-                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                y: { beginAtZero: true, ticks: { stepSize: 1 }, title: { display: true, text: 'Veces' } },
+                x: { title: { display: true, text: 'N° de Bazas' } }
             }
         }
     });
